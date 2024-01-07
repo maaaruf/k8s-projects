@@ -1,0 +1,81 @@
+create-vpc:
+	aws ec2 create-vpc \
+		--cidr-block 10.0.0.0/16 \
+		--region us-east-1 \
+		--output json \
+		--query 'Vpc.{VpcId:VpcId}' \
+		> vpc-output.json
+
+create-subnets:
+	aws ec2 create-subnet \
+		--vpc-id $(shell jq -r '.VpcId' vpc-output.json) \
+		--cidr-block 10.0.1.0/24 \
+		--availability-zone us-east-1a \
+		--output json \
+		--query 'Subnet.{SubnetId:SubnetId}' \
+		> public-subnet-output.json
+
+	aws ec2 create-subnet \
+		--vpc-id $(shell jq -r '.VpcId' vpc-output.json) \
+		--cidr-block 10.0.2.0/24 \
+		--availability-zone us-east-1b \
+		--output json \
+		--query 'Subnet.{SubnetId:SubnetId}' \
+		> private-subnet-output.json
+
+attach-internet-gateway:
+	aws ec2 create-internet-gateway \
+		--output json \
+		--query 'InternetGateway.{InternetGatewayId:InternetGatewayId}' \
+		> internet-gateway-output.json
+
+	aws ec2 attach-internet-gateway \
+		--vpc-id $(shell jq -r '.VpcId' vpc-output.json) \
+		--internet-gateway-id $(shell jq -r '.InternetGatewayId' internet-gateway-output.json)
+
+create-route-tables:
+	aws ec2 create-route-table \
+		--vpc-id $(shell jq -r '.VpcId' vpc-output.json) \
+		--output json \
+		--query 'RouteTable.{RouteTableId:RouteTableId}' \
+		> public-route-table-output.json
+
+	aws ec2 create-route-table \
+		--vpc-id $(shell jq -r '.VpcId' vpc-output.json) \
+		--output json \
+		--query 'RouteTable.{RouteTableId:RouteTableId}' \
+		> private-route-table-output.json
+
+associate-route-tables:
+	aws ec2 associate-route-table \
+		--subnet-id $(shell jq -r '.SubnetId' public-subnet-output.json) \
+		--route-table-id $(shell jq -r '.RouteTableId' public-route-table-output.json)
+
+	aws ec2 associate-route-table \
+		--subnet-id $(shell jq -r '.SubnetId' private-subnet-output.json) \
+		--route-table-id $(shell jq -r '.RouteTableId' private-route-table-output.json)
+
+create-internet-route:
+	aws ec2 create-route \
+		--route-table-id $(shell jq -r '.RouteTableId' public-route-table-output.json) \
+		--destination-cidr-block 0.0.0.0/0 \
+		--gateway-id $(shell jq -r '.InternetGatewayId' internet-gateway-output.json)
+
+create-security-group:
+	aws ec2 create-security-group \
+		--group-name my-security-group \
+		--description "My security group" \
+		--vpc-id $(shell jq -r '.VpcId' vpc-output.json) \
+		--output json \
+		--query 'GroupId' \
+		> security-group-output.json
+
+authorize-ingress:
+	aws ec2 authorize-security-group-ingress \
+		--group-id $(shell jq -r '.GroupId' security-group-output.json) \
+		--protocol tcp \
+		--port 22 \
+		--cidr 0.0.0.0/0
+
+clean:
+	rm -f vpc-output.json public-subnet-output.json private-subnet-output.json internet-gateway-output.json public-route-table-output.json private-route-table-output.json security-group-output.json
