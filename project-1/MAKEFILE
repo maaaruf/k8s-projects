@@ -77,5 +77,7 @@ authorize-ingress:
 		--port 22 \
 		--cidr 0.0.0.0/0
 
+all: create-vpc create-subnets attach-internet-gateway create-route-tables associate-route-tables create-internet-route create-security-group authorize-ingress
+
 clean:
 	rm -f vpc-output.json public-subnet-output.json private-subnet-output.json internet-gateway-output.json public-route-table-output.json private-route-table-output.json security-group-output.json
